@@ -9,6 +9,8 @@ import {
   Info,
   ChevronRight,
   Upload,
+  Search,
+  FileCheck,
 } from 'lucide-react';
 import { PageHeader } from '../../components/ui/PageHeader';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/Card';
