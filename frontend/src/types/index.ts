@@ -6,3 +6,4 @@ export * from './maintenance';
 export * from './diagnostic';
 export * from './passport';
 export * from './ai';
+export * from './evidence';
