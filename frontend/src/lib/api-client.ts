@@ -44,13 +44,14 @@ export const getAuthToken = (): string | null => {
 
 interface RequestOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;
+  skipAuth?: boolean;
 }
 
 export async function apiClient<T>(
   endpoint: string,
   options: RequestOptions = {}
 ): Promise<T> {
-  const { params, headers, ...customConfig } = options;
+  const { params, headers, skipAuth, ...customConfig } = options;
 
   let url = `${API_BASE_URL.replace(/\/+$/, '')}/${endpoint.replace(/^\/+/, '')}`;
 
@@ -67,7 +68,7 @@ export async function apiClient<T>(
     }
   }
 
-  const token = getAuthToken();
+  const token = !skipAuth ? getAuthToken() : null;
   const requestHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),

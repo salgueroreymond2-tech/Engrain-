@@ -11,6 +11,8 @@ import {
   Share2,
   FileText,
   Lock,
+  AlertTriangle,
+  ShieldAlert,
 } from 'lucide-react';
 import { passportService } from '../services/passportService';
 import { Passport } from '../types/passport';
@@ -25,19 +27,55 @@ export const PassportPublicPage: React.FC = () => {
   const { token } = useParams<{ token: string }>();
   const [passport, setPassport] = useState<Passport | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
+  const [errorTitle, setErrorTitle] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorType, setErrorType] = useState<'REVOKED' | 'INVALID' | 'UNAUTHORIZED' | 'GENERIC' | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const fetchPassport = async () => {
       if (!token) return;
       setIsLoading(true);
-      setError(null);
+      setErrorTitle(null);
+      setErrorMessage(null);
+      setErrorType(null);
+
       try {
         const data = await passportService.getPassportByToken(token);
+        if (data.status === 'REVOKED') {
+          setErrorType('REVOKED');
+          setErrorTitle('Enlace revocado');
+          setErrorMessage(
+            'El propietario del vehículo ha revocado el acceso público a este pasaporte digital. Por motivos de privacidad y seguridad, los datos vehiculares ya no están accesibles.'
+          );
+          setPassport(null);
+          return;
+        }
         setPassport(data);
       } catch (err: any) {
-        setError(err.message || 'No se pudo localizar el pasaporte digital');
+        if (err.code === 'REVOKED' || err.statusCode === 410) {
+          setErrorType('REVOKED');
+          setErrorTitle('Enlace revocado');
+          setErrorMessage(
+            'El propietario del vehículo ha revocado el acceso público a este pasaporte digital. Por motivos de privacidad y seguridad, los datos vehiculares ya no están accesibles.'
+          );
+        } else if (err.code === 'INVALID' || err.statusCode === 404) {
+          setErrorType('INVALID');
+          setErrorTitle('Pasaporte no encontrado');
+          setErrorMessage(
+            'El identificador proporcionado no es válido o no corresponde a ningún pasaporte activo en la red ENGRAIN.'
+          );
+        } else if (err.statusCode === 401) {
+          setErrorType('UNAUTHORIZED');
+          setErrorTitle('Acceso restringido');
+          setErrorMessage(
+            'El servidor backend requiere autenticación en este endpoint. El router de backend tiene el middleware de autenticación activado para rutas públicas.'
+          );
+        } else {
+          setErrorType('GENERIC');
+          setErrorTitle('No se pudo cargar el pasaporte');
+          setErrorMessage(err.message || 'Error de red o servidor no disponible.');
+        }
       } finally {
         setIsLoading(false);
       }
@@ -60,16 +98,34 @@ export const PassportPublicPage: React.FC = () => {
     );
   }
 
-  if (error || !passport) {
+  // Handle Revoked, Invalid or Not Found states without revealing vehicle information
+  if (errorType || !passport) {
     return (
       <div className="min-h-screen bg-carbon text-platinum flex flex-col justify-center items-center p-4">
         <div className="mb-6">
           <BrandLogo />
         </div>
-        <ErrorState
-          title="Pasaporte no encontrado o expirado"
-          message={error || 'El token de verificación no es válido o fue revocado por el propietario.'}
-        />
+        <div className="max-w-md w-full">
+          {errorType === 'REVOKED' ? (
+            <div className="p-6 rounded-2xl bg-carbon-900 border border-red-500/30 text-center space-y-4">
+              <div className="w-12 h-12 rounded-xl bg-red-500/20 text-red-400 flex items-center justify-center mx-auto">
+                <ShieldAlert className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h2 className="text-lg font-bold text-white">{errorTitle || 'Enlace Revocado'}</h2>
+                <p className="text-xs text-graphite-300 leading-relaxed">{errorMessage}</p>
+              </div>
+              <div className="p-3 rounded-lg bg-carbon border border-graphite-700/60 text-[11px] text-graphite-400 font-mono">
+                TOKEN CONSULTADO: {token}
+              </div>
+            </div>
+          ) : (
+            <ErrorState
+              title={errorTitle || 'Pasaporte no disponible'}
+              message={errorMessage || 'El token de verificación no es válido.'}
+            />
+          )}
+        </div>
         <Link to="/" className="mt-6">
           <Button variant="outline" size="sm">Volver al Portal Principal</Button>
         </Link>
@@ -78,6 +134,7 @@ export const PassportPublicPage: React.FC = () => {
   }
 
   const { vehicle, metrics, records } = passport.snapshot;
+  const isDemo = Boolean(passport._isDemo);
 
   return (
     <div className="min-h-screen bg-carbon text-platinum flex flex-col">
@@ -113,6 +170,9 @@ export const PassportPublicPage: React.FC = () => {
                   Pasaporte Vehicular Verificado
                 </h1>
                 <Badge variant="success" size="sm" dot>ACTIVO</Badge>
+                {isDemo && (
+                  <Badge variant="warning" size="sm">Modo demostración</Badge>
+                )}
               </div>
               <p className="text-xs text-graphite-300 font-mono mt-0.5">
                 TOKEN PÚBLICO: <span className="text-platinum font-bold">{passport.publicToken}</span>
@@ -126,6 +186,16 @@ export const PassportPublicPage: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* Demo Notice Banner if demo mode */}
+        {isDemo && (
+          <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center gap-2 text-xs text-amber-300">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>
+              <strong>Expediente Demostrativo:</strong> Esta vista contiene datos simulados para validación de arquitectura de interfaz en el hackathon.
+            </span>
+          </div>
+        )}
 
         {/* Vehicle Specs Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -207,46 +277,52 @@ export const PassportPublicPage: React.FC = () => {
           </div>
 
           <div className="space-y-3">
-            {records.map((rec, index) => {
-              const icons = {
-                MAINTENANCE: <Wrench className="w-4 h-4 text-brand" />,
-                DIAGNOSTIC: <Activity className="w-4 h-4 text-blue-400" />,
-                WORK_ORDER: <FileText className="w-4 h-4 text-yellow-400" />,
-                INSPECTION: <CheckCircle2 className="w-4 h-4 text-trust" />,
-              };
+            {records.length === 0 ? (
+              <div className="p-8 text-center text-xs text-graphite-400 bg-carbon-900 border border-graphite-700/60 rounded-xl">
+                Aún no hay intervenciones de mantenimiento registradas para este vehículo.
+              </div>
+            ) : (
+              records.map((rec, index) => {
+                const icons = {
+                  MAINTENANCE: <Wrench className="w-4 h-4 text-brand" />,
+                  DIAGNOSTIC: <Activity className="w-4 h-4 text-blue-400" />,
+                  WORK_ORDER: <FileText className="w-4 h-4 text-yellow-400" />,
+                  INSPECTION: <CheckCircle2 className="w-4 h-4 text-trust" />,
+                };
 
-              return (
-                <div
-                  key={index}
-                  className="p-4 rounded-xl bg-graphite-800/60 border border-graphite-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-graphite-500 transition-colors"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-carbon border border-graphite-600/60 flex items-center justify-center shrink-0 mt-0.5">
-                      {icons[rec.type]}
-                    </div>
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-bold text-platinum">{rec.title}</p>
-                        {rec.verified && (
-                          <Badge variant="success" size="sm" className="text-[10px] py-0">
-                            CERTIFICADO
-                          </Badge>
-                        )}
+                return (
+                  <div
+                    key={index}
+                    className="p-4 rounded-xl bg-graphite-800/60 border border-graphite-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:border-graphite-500 transition-colors"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-carbon border border-graphite-600/60 flex items-center justify-center shrink-0 mt-0.5">
+                        {icons[rec.type]}
                       </div>
-                      <p className="text-xs text-graphite-400">
-                        {rec.source} • <span className="font-mono text-platinum">{rec.mileageKm.toLocaleString()} km</span>
-                      </p>
-                      {rec.notes && <p className="text-xs text-graphite-300 pt-1">{rec.notes}</p>}
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-bold text-platinum">{rec.title}</p>
+                          {rec.verified && (
+                            <Badge variant="success" size="sm" className="text-[10px] py-0">
+                              CERTIFICADO
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="text-xs text-graphite-400">
+                          {rec.source} • <span className="font-mono text-platinum">{rec.mileageKm.toLocaleString()} km</span>
+                        </p>
+                        {rec.notes && <p className="text-xs text-graphite-300 pt-1">{rec.notes}</p>}
+                      </div>
+                    </div>
+
+                    <div className="text-xs font-mono text-graphite-400 sm:text-right shrink-0 flex items-center gap-1.5 sm:flex-col sm:items-end">
+                      <Calendar className="w-3.5 h-3.5 text-graphite-500" />
+                      <span>{new Date(rec.date).toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
                     </div>
                   </div>
-
-                  <div className="text-xs font-mono text-graphite-400 sm:text-right shrink-0 flex items-center gap-1.5 sm:flex-col sm:items-end">
-                    <Calendar className="w-3.5 h-3.5 text-graphite-500" />
-                    <span>{new Date(rec.date).toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: 'numeric' })}</span>
-                  </div>
-                </div>
-              );
-            })}
+                );
+              })
+            )}
           </div>
         </div>
       </main>

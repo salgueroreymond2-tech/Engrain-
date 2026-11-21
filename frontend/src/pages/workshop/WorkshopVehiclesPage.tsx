@@ -19,7 +19,6 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Textarea } from '../../components/ui/Textarea';
 import { Modal } from '../../components/ui/Modal';
-import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/Card';
 import { vehicleService } from '../../services/vehicleService';
 import { workOrderService } from '../../services/workOrderService';
 import { Vehicle } from '../../types/vehicle';
