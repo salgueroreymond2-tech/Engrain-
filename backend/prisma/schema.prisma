@@ -3,16 +3,29 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 enum UserRole {
-  OWNER
-  TECHNICIAN
+  SUPER_ADMIN
   WORKSHOP_ADMIN
-  DEALER_ADMIN
-  PLATFORM_ADMIN
+  MECHANIC
+  VEHICLE_OWNER
+  DEALERSHIP_ADMIN
+  SALES_AGENT
+}
+
+enum OrganizationType {
+  WORKSHOP
+  DEALERSHIP
+  PLATFORM
+}
+
+enum OrganizationMemberStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
 }
 
 enum VehicleStatus {
@@ -25,14 +38,62 @@ enum VehicleDataSource {
   MANUAL
   OBD2
   WORKSHOP
-  AGENCY
+  DEALERSHIP
   IMPORTED
 }
 
-enum WorkshopMemberRole {
-  ADMIN
-  TECHNICIAN
-  ADVISOR
+enum OwnershipKind {
+  USER
+  ORGANIZATION
+}
+
+enum VehicleAccessPermission {
+  VIEW
+  SERVICE
+  MANAGE
+}
+
+enum VehicleAccessGrantStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum DeviceType {
+  OBD2_GENERIC
+  OBD2_BLUETOOTH
+  OEM
+}
+
+enum DeviceStatus {
+  ACTIVE
+  OFFLINE
+  REVOKED
+}
+
+enum DiagnosticSource {
+  OBD2
+  MANUAL
+  WORKSHOP
+}
+
+enum DiagnosticScanStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  PARTIAL
+}
+
+enum DiagnosticTroubleCodeStatus {
+  ACTIVE
+  PENDING
+  CLEARED
+}
+
+enum DiagnosticTroubleCodeSeverity {
+  INFO
+  WARNING
+  CRITICAL
 }
 
 enum WorkOrderStatus {
@@ -58,17 +119,91 @@ enum EvidenceType {
   OBD_REPORT
 }
 
-enum DiagnosticStatus {
-  PENDING
-  SUCCESS
-  FAILED
-  PARTIAL
+enum RecordSource {
+  OBD2_DEVICE
+  WORKSHOP_RECORDED
+  EVIDENCE_BACKED
+  OWNER_DECLARED
+  SIMULATED
 }
 
-enum DiagnosticSource {
-  OBD2
+enum IdentityVerificationStatus {
+  UNKNOWN
+  DECLARED
+  ORGANIZATION_IDENTIFIED
+  VERIFIED
+}
+
+enum EvidenceVerificationStatus {
+  NONE
+  AVAILABLE
+  HASH_VERIFIED
+}
+
+enum RecordIntegrityStatus {
+  DRAFT
+  FINALIZED
+  SUPERSEDED
+}
+
+enum VehicleEventType {
+  VEHICLE_REGISTERED
+  OWNERSHIP_RECORDED
+  ACCESS_GRANTED
+  MILEAGE_RECORDED
+  MILEAGE_INCONSISTENCY_DETECTED
+  MAINTENANCE_RECORDED
+  MAINTENANCE_FINALIZED
+  MAINTENANCE_CORRECTED
+  DIAGNOSTIC_RECORDED
+}
+
+enum MaintenanceScheduleStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+}
+
+enum MileageSource {
   MANUAL
+  OBD2
   WORKSHOP
+  IMPORTED
+}
+
+enum VehicleTransferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+  EXPIRED
+}
+
+enum PassportVisibility {
+  PRIVATE
+  SHAREABLE
+}
+
+enum PassportStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  ACCESS_GRANTED
+  ACCESS_REVOKED
+  PASSPORT_SHARED
+  PASSPORT_VIEWED
+  PASSPORT_REVOKED
+  TRANSFER_INITIATED
+  TRANSFER_COMPLETED
+  AI_ANALYSIS_REQUESTED
 }
 
 enum NotificationType {
@@ -76,201 +211,873 @@ enum NotificationType {
   WORK_ORDER_UPDATE
   DIAGNOSTIC_READY
   PASSPORT_SHARED
+  VEHICLE_ACCESS_GRANTED
   SYSTEM
 }
 
-enum PassportVisibility {
-  PRIVATE
-  SHAREABLE
-  PUBLIC
+enum ExternalProviderCode {
+  HACIENDA
+  INS
+  DEKRA
+  COSEVI
+  REGISTRO_NACIONAL
+  MANUAL_DOCUMENT
+  MOCK
 }
 
-enum PassportStatus {
-  ACTIVE
-  REVOKED
+enum ExternalProviderStatus {
+  AVAILABLE
+  REQUIRES_CREDENTIALS
+  REQUIRES_AGREEMENT
+  MANUAL_ONLY
+  UNAVAILABLE
+  NOT_IMPLEMENTED
+}
+
+enum ExternalQueryStatus {
+  PENDING
+  COMPLETED
+  PARTIAL
+  FAILED
+  MANUAL_REQUIRED
+}
+
+enum ExternalDataMethod {
+  AUTHORIZED_API
+  MANUAL_PORTAL
+  MANUAL_DOCUMENT
+  MOCK
+}
+
+enum ExternalRecordType {
+  VEHICLE_PROFILE
+  TAX
+  INSURANCE
+  INSPECTION
+  TRAFFIC
+  REGISTRY
+  LEGAL
+  DOCUMENT
 }
 
 model User {
+  id                      String                @id @default(cuid())
+  name                    String                @db.VarChar(120)
+  email                   String                @unique @db.VarChar(254)
+  passwordHash            String                @db.VarChar(255)
+  role                    UserRole              @default(VEHICLE_OWNER)
+  isActive                Boolean               @default(true)
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+  sessions                AuthSession[]
+  organizationMemberships OrganizationMember[]
+  vehicleOwnerships       VehicleOwnership[]    @relation("OwnershipUser")
+  receivedAccessGrants    VehicleAccessGrant[]  @relation("GrantToUser")
+  grantedAccessGrants     VehicleAccessGrant[]  @relation("GrantByUser")
+  registeredDevices       Device[]              @relation("DeviceRegisteredBy")
+  diagnosticScans         DiagnosticScan[]      @relation("DiagnosticPerformedBy")
+  workOrdersCreated       WorkOrder[]           @relation("WorkOrderCreatedBy")
+  assignedWorkOrders      WorkOrder[]           @relation("WorkOrderAssignedTo")
+  maintenanceRecords      MaintenanceRecord[]   @relation("MaintenanceCreatedBy")
+  maintenanceSchedules    MaintenanceSchedule[] @relation("ScheduleCreatedBy")
+  mileageLogs             VehicleMileageLog[]   @relation("MileageLoggedBy")
+  initiatedTransfers      VehicleTransfer[]     @relation("TransferInitiatedBy")
+  transfersFrom           VehicleTransfer[]     @relation("TransferFromUser")
+  transfersTo             VehicleTransfer[]     @relation("TransferToUser")
+  passportsCreated        VehiclePassport[]     @relation("PassportCreatedBy")
+  passportsRevoked        VehiclePassport[]     @relation("PassportRevokedBy")
+  auditLogs               AuditLog[]            @relation("AuditActor")
+  uploadedEvidence        ServiceEvidence[]     @relation("EvidenceUploadedBy")
+  vehicleEvents           VehicleEvent[]        @relation("VehicleEventAuthor")
+  notifications           Notification[]
+  externalQueries         VehicleExternalQuery[] @relation("ExternalQueryRequestedBy")
+  externalVerificationLogs ExternalVerificationLog[] @relation("ExternalVerificationActor")
+
+  @@map("users")
+}
+
+model AuthSession {
+  id               String    @id @default(cuid())
+  userId           String
+  refreshTokenHash String    @db.VarChar(64)
+  userAgent        String?   @db.VarChar(512)
+  ipAddress        String?   @db.VarChar(64)
+  expiresAt        DateTime
+  lastUsedAt       DateTime  @default(now())
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt, expiresAt])
+  @@map("auth_sessions")
+}
+
+model Organization {
   id                   String                @id @default(cuid())
-  name                 String
-  email                String                @unique
-  passwordHash         String
-  role                 UserRole              @default(OWNER)
+  name                 String                @db.VarChar(160)
+  type                 OrganizationType
+  taxId                String?               @unique @db.VarChar(64)
+  email                String?               @db.VarChar(254)
+  phone                String?               @db.VarChar(40)
+  address              String?               @db.Text
+  isActive             Boolean               @default(true)
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
-  vehicles             Vehicle[]             @relation("VehicleOwner")
-  ownedWorkshops       Workshop[]            @relation("WorkshopOwner")
-  workshopMemberships  WorkshopMember[]
-  workOrdersCreated    WorkOrder[]           @relation("WorkOrderCreator")
-  maintenancesCreated  Maintenance[]         @relation("MaintenanceCreator")
-  diagnosticsCreated   Diagnostic[]          @relation("DiagnosticCreator")
+  members              OrganizationMember[]
+  workshop             Workshop?
+  ownedVehicles        VehicleOwnership[]    @relation("OwnershipOrganization")
+  registeredVehicles   Vehicle[]             @relation("VehicleRegisteredByOrganization")
+  receivedAccessGrants VehicleAccessGrant[]  @relation("GrantToOrganization")
+  devices              Device[]
+  diagnosticScans      DiagnosticScan[]
+  workOrders           WorkOrder[]
+  maintenanceRecords   MaintenanceRecord[]
+  mileageLogs          VehicleMileageLog[]
+  vehicleEvents        VehicleEvent[]
+  auditLogs            AuditLog[]
   notifications        Notification[]
-  conversations        ConversationMessage[]
+
+  @@index([type, isActive])
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id             String                   @id @default(cuid())
+  organizationId String
+  userId         String
+  role           UserRole
+  status         OrganizationMemberStatus @default(ACTIVE)
+  joinedAt       DateTime                 @default(now())
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  organization   Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId, status])
+  @@map("organization_members")
 }
 
 model Vehicle {
-  id            String             @id @default(cuid())
-  ownerId       String
-  vin           String             @unique @db.VarChar(17)
-  plate         String?            @db.VarChar(20)
-  make          String             @db.VarChar(80)
-  model         String             @db.VarChar(80)
-  year          Int
-  mileageKm     Int                @default(0)
-  status        VehicleStatus      @default(ACTIVE)
-  dataSource    VehicleDataSource  @default(MANUAL)
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
-  owner         User               @relation("VehicleOwner", fields: [ownerId], references: [id])
-  workOrders    WorkOrder[]
-  maintenances  Maintenance[]
-  diagnostics   Diagnostic[]
-  passports     Passport[]
+  id                       String             @id @default(cuid())
+  vin                      String             @unique @db.VarChar(17)
+  plate                    String?            @db.VarChar(20)
+  make                     String             @db.VarChar(80)
+  model                    String             @db.VarChar(80)
+  year                     Int
+  mileageKm                Int                @default(0)
+  status                   VehicleStatus      @default(ACTIVE)
+  dataSource               VehicleDataSource  @default(MANUAL)
+  registeredOrganizationId String?
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+  registeredOrganization   Organization?      @relation("VehicleRegisteredByOrganization", fields: [registeredOrganizationId], references: [id], onDelete: SetNull)
+  ownerships               VehicleOwnership[]
+  accessGrants             VehicleAccessGrant[]
+  devices                  Device[]
+  diagnosticScans          DiagnosticScan[]
+  workOrders               WorkOrder[]
+  maintenanceRecords       MaintenanceRecord[]
+  maintenanceSchedules     MaintenanceSchedule[]
+  mileageLogs              VehicleMileageLog[]
+  transfers                VehicleTransfer[]
+  passports                VehiclePassport[]
+  auditLogs                AuditLog[]
+  notifications            Notification[]
+  events                  VehicleEvent[]
+  externalQueries        VehicleExternalQuery[]
+  externalRecords        VehicleExternalRecord[]
+  legalRecords           VehicleLegalRecord[]
+  taxRecords             VehicleTaxRecord[]
+  insuranceRecords       VehicleInsuranceRecord[]
+  inspectionRecords      VehicleInspectionRecord[]
+  trafficRecords         VehicleTrafficRecord[]
+  registryRecords        VehicleRegistryRecord[]
 
-  @@index([ownerId, status])
+  @@index([plate])
+  @@index([registeredOrganizationId, status])
+  @@map("vehicles")
+}
+
+model VehicleOwnership {
+  id             String        @id @default(cuid())
+  vehicleId      String
+  userId         String?
+  organizationId String?
+  ownerKind      OwnershipKind
+  acquiredAt     DateTime      @default(now())
+  releasedAt     DateTime?
+  isCurrent      Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  vehicle        Vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  user           User?         @relation("OwnershipUser", fields: [userId], references: [id], onDelete: SetNull)
+  organization   Organization? @relation("OwnershipOrganization", fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@index([vehicleId, isCurrent])
+  @@index([userId, isCurrent])
+  @@index([organizationId, isCurrent])
+  @@map("vehicle_ownerships")
+}
+
+model VehicleAccessGrant {
+  id             String                    @id @default(cuid())
+  vehicleId      String
+  targetKey      String                    @db.VarChar(220)
+  granteeUserId  String?
+  organizationId String?
+  workshopId     String?
+  grantedById    String
+  permission     VehicleAccessPermission
+  status         VehicleAccessGrantStatus  @default(ACTIVE)
+  expiresAt      DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  vehicle        Vehicle                   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  granteeUser    User?                     @relation("GrantToUser", fields: [granteeUserId], references: [id], onDelete: Cascade)
+  organization   Organization?             @relation("GrantToOrganization", fields: [organizationId], references: [id], onDelete: Cascade)
+  workshop       Workshop?                 @relation(fields: [workshopId], references: [id], onDelete: Cascade)
+  grantedBy      User                      @relation("GrantByUser", fields: [grantedById], references: [id])
+
+  @@unique([vehicleId, targetKey])
+  @@index([granteeUserId, status, expiresAt])
+  @@index([organizationId, status, expiresAt])
+  @@index([workshopId, status, expiresAt])
+  @@map("vehicle_access_grants")
 }
 
 model Workshop {
-  id          String           @id @default(cuid())
-  ownerId     String
-  name        String
-  taxId       String?          @unique
-  phone       String?
-  address     String?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  owner       User             @relation("WorkshopOwner", fields: [ownerId], references: [id])
-  members     WorkshopMember[]
-  workOrders  WorkOrder[]
+  id                 String               @id @default(cuid())
+  organizationId     String               @unique
+  name               String               @db.VarChar(160)
+  phone              String?              @db.VarChar(40)
+  address            String?              @db.Text
+  isActive           Boolean              @default(true)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  organization       Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  accessGrants       VehicleAccessGrant[]
+  workOrders         WorkOrder[]
+  maintenanceRecords MaintenanceRecord[]
+
+  @@map("workshops")
 }
 
-model WorkshopMember {
-  id          String              @id @default(cuid())
-  workshopId  String
-  userId      String
-  role        WorkshopMemberRole  @default(TECHNICIAN)
-  createdAt   DateTime            @default(now())
-  workshop    Workshop            @relation(fields: [workshopId], references: [id], onDelete: Cascade)
-  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+model Device {
+  id                 String        @id @default(cuid())
+  serialNumber       String        @unique @db.VarChar(128)
+  type               DeviceType
+  status             DeviceStatus  @default(ACTIVE)
+  vehicleId          String
+  organizationId     String?
+  registeredByUserId String
+  lastSeenAt         DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  vehicle            Vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  organization       Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  registeredBy       User          @relation("DeviceRegisteredBy", fields: [registeredByUserId], references: [id])
+  diagnosticScans    DiagnosticScan[]
 
-  @@unique([workshopId, userId])
-  @@index([userId])
+  @@index([vehicleId, status])
+  @@index([organizationId, status])
+  @@map("devices")
+}
+
+model DiagnosticScan {
+  id                String               @id @default(cuid())
+  vehicleId         String
+  deviceId          String?
+  organizationId    String?
+  performedByUserId String
+  source            DiagnosticSource
+  providerKey       String               @default("unknown") @db.VarChar(80)
+  providerMetadata  Json?
+  isSimulated       Boolean              @default(false)
+  physicalConnectionVerified Boolean      @default(false)
+  recordSource      RecordSource             @default(OBD2_DEVICE)
+  identityStatus    IdentityVerificationStatus @default(UNKNOWN)
+  evidenceStatus    EvidenceVerificationStatus @default(NONE)
+  integrityStatus   RecordIntegrityStatus    @default(DRAFT)
+  version           Int                      @default(1)
+  contentHash       String?                  @db.VarChar(64)
+  finalizedHash     String?                  @db.VarChar(64)
+  finalizedAt       DateTime?
+  status            DiagnosticScanStatus @default(PENDING)
+  mileageKm         Int?
+  rawPayload        Json?
+  scannedAt         DateTime             @default(now())
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  vehicle           Vehicle              @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  device            Device?              @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  organization      Organization?        @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  performedBy       User                 @relation("DiagnosticPerformedBy", fields: [performedByUserId], references: [id])
+  troubleCodes      DiagnosticTroubleCode[]
+  measurements      DiagnosticMeasurement[]
+  evidences         ServiceEvidence[]
+  events            VehicleEvent[]
+
+  @@index([vehicleId, scannedAt])
+  @@index([organizationId, scannedAt])
+  @@map("diagnostic_scans")
+}
+
+model DiagnosticTroubleCode {
+  id          String                        @id @default(cuid())
+  scanId      String
+  code        String                        @db.VarChar(16)
+  status      DiagnosticTroubleCodeStatus   @default(ACTIVE)
+  severity    DiagnosticTroubleCodeSeverity @default(INFO)
+  description String?                       @db.Text
+  createdAt   DateTime                      @default(now())
+  scan        DiagnosticScan                @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@unique([scanId, code])
+  @@index([code, status])
+  @@map("diagnostic_trouble_codes")
+}
+
+model DiagnosticMeasurement {
+  id                String       @id @default(cuid())
+  scanId            String
+  metric            String       @db.VarChar(80)
+  label             String?      @db.VarChar(120)
+  rawValue          String?      @db.Text
+  normalizedValue   Decimal?     @db.Decimal(14, 4)
+  unit              String?      @db.VarChar(32)
+  recordSource      RecordSource @default(OBD2_DEVICE)
+  capturedAt        DateTime     @default(now())
+  metadata          Json?
+  createdAt         DateTime     @default(now())
+  scan              DiagnosticScan @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  @@index([scanId, metric, capturedAt])
+  @@index([metric, capturedAt])
+  @@map("diagnostic_measurements")
 }
 
 model WorkOrder {
-  id          String            @id @default(cuid())
-  vehicleId   String
-  workshopId  String
-  createdById String
-  status      WorkOrderStatus   @default(DRAFT)
-  title       String
-  description String?           @db.Text
-  openedAt    DateTime          @default(now())
-  closedAt    DateTime?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  vehicle     Vehicle           @relation(fields: [vehicleId], references: [id])
-  workshop    Workshop          @relation(fields: [workshopId], references: [id])
-  createdBy   User              @relation("WorkOrderCreator", fields: [createdById], references: [id])
-  evidences   Evidence[]
+  id                 String          @id @default(cuid())
+  reference          String          @unique @db.VarChar(48)
+  vehicleId          String
+  workshopId         String
+  organizationId     String
+  createdByUserId    String
+  assignedMechanicId String?
+  status             WorkOrderStatus @default(DRAFT)
+  title              String          @db.VarChar(160)
+  description        String?         @db.Text
+  openedAt           DateTime        @default(now())
+  closedAt           DateTime?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  vehicle            Vehicle         @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  workshop           Workshop        @relation(fields: [workshopId], references: [id])
+  organization       Organization    @relation(fields: [organizationId], references: [id])
+  createdBy          User            @relation("WorkOrderCreatedBy", fields: [createdByUserId], references: [id])
+  assignedMechanic   User?           @relation("WorkOrderAssignedTo", fields: [assignedMechanicId], references: [id], onDelete: SetNull)
+  maintenanceRecords MaintenanceRecord[]
+  evidences          ServiceEvidence[]
 
   @@index([vehicleId, status])
   @@index([workshopId, status])
+  @@index([organizationId, status])
+  @@map("work_orders")
 }
 
-model Maintenance {
-  id          String             @id @default(cuid())
-  vehicleId   String
-  createdById String
-  status      MaintenanceStatus  @default(SCHEDULED)
-  title       String
-  description String?            @db.Text
-  dueDate     DateTime?
-  completedAt DateTime?
-  mileageKm   Int?
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
-  vehicle     Vehicle            @relation(fields: [vehicleId], references: [id])
-  createdBy   User               @relation("MaintenanceCreator", fields: [createdById], references: [id])
-  evidences   Evidence[]
-
-  @@index([vehicleId, status])
-}
-
-model Evidence {
-  id            String        @id @default(cuid())
-  workOrderId   String?
-  maintenanceId String?
-  type          EvidenceType
-  storageKey    String        @unique
-  fileName      String
-  mimeType      String
-  sizeBytes     Int
-  sha256        String?       @db.VarChar(64)
-  createdAt     DateTime      @default(now())
-  workOrder     WorkOrder?    @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
-  maintenance   Maintenance?  @relation(fields: [maintenanceId], references: [id], onDelete: Cascade)
-
-  @@index([workOrderId])
-  @@index([maintenanceId])
-}
-
-model Diagnostic {
-  id          String            @id @default(cuid())
-  vehicleId   String
-  createdById String
-  source      DiagnosticSource
-  status      DiagnosticStatus  @default(PENDING)
-  mileageKm   Int?
-  dtcs        Json?
-  payload     Json?
-  performedAt DateTime          @default(now())
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  vehicle     Vehicle           @relation(fields: [vehicleId], references: [id])
-  createdBy   User              @relation("DiagnosticCreator", fields: [createdById], references: [id])
+model MaintenanceRecord {
+  id                 String            @id @default(cuid())
+  vehicleId          String
+  workOrderId        String?
+  workshopId         String?
+  organizationId     String?
+  createdByUserId    String
+  status             MaintenanceStatus @default(SCHEDULED)
+  recordSource       RecordSource      @default(OWNER_DECLARED)
+  identityStatus     IdentityVerificationStatus @default(DECLARED)
+  evidenceStatus     EvidenceVerificationStatus @default(NONE)
+  integrityStatus    RecordIntegrityStatus @default(DRAFT)
+  version            Int               @default(1)
+  supersedesId       String?
+  correctionReason   String?           @db.Text
+  contentHash        String?           @db.VarChar(64)
+  finalizedHash      String?           @db.VarChar(64)
+  finalizedAt        DateTime?
+  title              String            @db.VarChar(160)
+  description        String?           @db.Text
+  performedAt        DateTime?
+  mileageKm          Int?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  vehicle            Vehicle           @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  workOrder          WorkOrder?        @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+  workshop           Workshop?         @relation(fields: [workshopId], references: [id], onDelete: SetNull)
+  organization       Organization?     @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  createdBy          User              @relation("MaintenanceCreatedBy", fields: [createdByUserId], references: [id])
+  procedures         ServiceProcedure[]
+  parts              ServicePart[]
+  evidences          ServiceEvidence[]
+  events             VehicleEvent[]
+  supersedes         MaintenanceRecord? @relation("MaintenanceCorrection", fields: [supersedesId], references: [id], onDelete: SetNull)
+  corrections        MaintenanceRecord[] @relation("MaintenanceCorrection")
 
   @@index([vehicleId, performedAt])
+  @@index([workOrderId])
+  @@index([organizationId, status])
+  @@index([supersedesId])
+  @@map("maintenance_records")
 }
 
-model ConversationMessage {
-  id          String    @id @default(cuid())
-  userId      String
-  vehicleId   String?
-  role        String    @db.VarChar(20)
-  content     String    @db.Text
-  metadata    Json?
-  createdAt   DateTime  @default(now())
-  user        User      @relation(fields: [userId], references: [id])
+model ServiceProcedure {
+  id                  String            @id @default(cuid())
+  maintenanceRecordId String
+  name                String            @db.VarChar(160)
+  description         String?           @db.Text
+  laborMinutes        Int?
+  completedAt         DateTime?
+  createdAt           DateTime          @default(now())
+  maintenanceRecord   MaintenanceRecord @relation(fields: [maintenanceRecordId], references: [id], onDelete: Cascade)
 
-  @@index([userId, createdAt])
+  @@index([maintenanceRecordId])
+  @@map("service_procedures")
+}
+
+model ServicePart {
+  id                  String            @id @default(cuid())
+  maintenanceRecordId String
+  partNumber          String?           @db.VarChar(120)
+  name                String            @db.VarChar(160)
+  quantity            Int               @default(1)
+  unitCostCents       Int?
+  createdAt           DateTime          @default(now())
+  maintenanceRecord   MaintenanceRecord @relation(fields: [maintenanceRecordId], references: [id], onDelete: Cascade)
+
+  @@index([maintenanceRecordId])
+  @@map("service_parts")
+}
+
+model ServiceEvidence {
+  id                  String             @id @default(cuid())
+  maintenanceRecordId String?
+  workOrderId         String?
+  diagnosticScanId    String?
+  vehicleEventId      String?
+  uploadedByUserId    String
+  type                EvidenceType
+  storageKey          String             @unique @db.VarChar(255)
+  fileName            String             @db.VarChar(255)
+  mimeType            String             @db.VarChar(127)
+  sizeBytes           Int
+  sha256              String             @db.VarChar(64)
+  createdAt           DateTime           @default(now())
+  maintenanceRecord   MaintenanceRecord? @relation(fields: [maintenanceRecordId], references: [id], onDelete: Cascade)
+  workOrder           WorkOrder?         @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  diagnosticScan      DiagnosticScan?    @relation(fields: [diagnosticScanId], references: [id], onDelete: Cascade)
+  vehicleEvent        VehicleEvent?      @relation(fields: [vehicleEventId], references: [id], onDelete: Cascade)
+  uploadedBy          User               @relation("EvidenceUploadedBy", fields: [uploadedByUserId], references: [id])
+
+  @@index([maintenanceRecordId])
+  @@index([workOrderId])
+  @@index([diagnosticScanId])
+  @@index([vehicleEventId])
+  @@map("service_evidence")
+}
+
+model MaintenanceSchedule {
+  id               String                    @id @default(cuid())
+  vehicleId        String
+  createdByUserId  String
+  title            String                    @db.VarChar(160)
+  intervalKm       Int?
+  intervalDays     Int?
+  nextDueMileageKm Int?
+  nextDueAt        DateTime?
+  status           MaintenanceScheduleStatus @default(ACTIVE)
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  vehicle          Vehicle                   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  createdBy        User                      @relation("ScheduleCreatedBy", fields: [createdByUserId], references: [id])
+
+  @@index([vehicleId, status, nextDueAt])
+  @@map("maintenance_schedules")
+}
+
+model VehicleMileageLog {
+  id               String        @id @default(cuid())
+  vehicleId        String
+  recordedByUserId String
+  organizationId   String?
+  mileageKm        Int
+  recordSource     RecordSource           @default(OWNER_DECLARED)
+  identityStatus   IdentityVerificationStatus @default(DECLARED)
+  evidenceStatus   EvidenceVerificationStatus @default(NONE)
+  inconsistencyDetected Boolean            @default(false)
+  inconsistencyReason   String?            @db.Text
+  recordedAt       DateTime      @default(now())
+  createdAt        DateTime      @default(now())
+  vehicle          Vehicle       @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  recordedBy       User          @relation("MileageLoggedBy", fields: [recordedByUserId], references: [id])
+  organization     Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  events           VehicleEvent[]
+
+  @@index([vehicleId, recordedAt])
+  @@index([organizationId, recordedAt])
+  @@map("vehicle_mileage_logs")
+}
+
+model VehicleEvent {
+  id                  String                    @id @default(cuid())
+  vehicleId           String
+  type                VehicleEventType
+  source              RecordSource
+  authorUserId        String
+  organizationId      String?
+  occurredAt          DateTime                  @default(now())
+  summary             String                    @db.VarChar(240)
+  identityStatus      IdentityVerificationStatus @default(DECLARED)
+  evidenceStatus      EvidenceVerificationStatus @default(NONE)
+  integrityStatus     RecordIntegrityStatus     @default(DRAFT)
+  version             Int                       @default(1)
+  supersedesId        String?
+  correctionReason    String?                   @db.Text
+  contentHash         String?                   @db.VarChar(64)
+  finalizedHash       String?                   @db.VarChar(64)
+  finalizedAt         DateTime?
+  maintenanceRecordId String?
+  diagnosticScanId    String?
+  mileageLogId        String?
+  metadata            Json?
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+  vehicle             Vehicle                   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  author              User                      @relation("VehicleEventAuthor", fields: [authorUserId], references: [id])
+  organization        Organization?             @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  maintenanceRecord   MaintenanceRecord?        @relation(fields: [maintenanceRecordId], references: [id], onDelete: SetNull)
+  diagnosticScan      DiagnosticScan?           @relation(fields: [diagnosticScanId], references: [id], onDelete: SetNull)
+  mileageLog          VehicleMileageLog?        @relation(fields: [mileageLogId], references: [id], onDelete: SetNull)
+  supersedes          VehicleEvent?             @relation("VehicleEventCorrection", fields: [supersedesId], references: [id], onDelete: SetNull)
+  corrections         VehicleEvent[]            @relation("VehicleEventCorrection")
+  evidences           ServiceEvidence[]
+
+  @@index([vehicleId, occurredAt])
+  @@index([organizationId, occurredAt])
+  @@index([supersedesId])
+  @@map("vehicle_events")
+}
+
+model VehicleTransfer {
+  id                String                @id @default(cuid())
+  vehicleId         String
+  initiatedByUserId String
+  fromUserId        String?
+  toUserId          String?
+  recipientEmail    String?               @db.VarChar(254)
+  status            VehicleTransferStatus @default(PENDING)
+  expiresAt         DateTime
+  acceptedAt        DateTime?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  vehicle           Vehicle               @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  initiatedBy       User                  @relation("TransferInitiatedBy", fields: [initiatedByUserId], references: [id])
+  fromUser          User?                 @relation("TransferFromUser", fields: [fromUserId], references: [id], onDelete: SetNull)
+  toUser            User?                 @relation("TransferToUser", fields: [toUserId], references: [id], onDelete: SetNull)
+
+  @@index([vehicleId, status])
+  @@index([recipientEmail, status])
+  @@map("vehicle_transfers")
+}
+
+model ExternalDataProvider {
+  id                   String                 @id @default(cuid())
+  code                 ExternalProviderCode   @unique
+  name                 String                 @db.VarChar(160)
+  status               ExternalProviderStatus
+  supportsPlateLookup  Boolean                @default(false)
+  allowsAutomation     Boolean                @default(false)
+  requiresCredentials  Boolean                @default(false)
+  requiresAgreement    Boolean                @default(false)
+  documentationUrl     String?                @db.VarChar(512)
+  manualPortalUrl      String?                @db.VarChar(512)
+  dataClassification   String?                @db.VarChar(80)
+  termsSummary         String?                @db.Text
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  credentials          ExternalProviderCredential[]
+  records              VehicleExternalRecord[]
+  verificationLogs     ExternalVerificationLog[]
+
+  @@map("external_data_providers")
+}
+
+model ExternalProviderCredential {
+  id            String               @id @default(cuid())
+  providerId    String
+  label         String               @db.VarChar(120)
+  secretCiphertext String             @db.Text
+  keyVersion    String               @db.VarChar(32)
+  scopes        Json?
+  expiresAt     DateTime?
+  lastValidatedAt DateTime?
+  isActive      Boolean              @default(true)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  provider      ExternalDataProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+
+  @@index([providerId, isActive])
+  @@map("external_provider_credentials")
+}
+
+model VehicleExternalQuery {
+  id                   String              @id @default(cuid())
+  vehicleId            String?
+  requestedByUserId    String
+  plateCategory        String?             @db.VarChar(24)
+  plateCode            String?             @db.VarChar(24)
+  plateNumber          String              @db.VarChar(64)
+  normalizedPlate      String              @db.VarChar(128)
+  requestedProviders   Json
+  status               ExternalQueryStatus @default(PENDING)
+  queryMethod          ExternalDataMethod
+  source               String              @db.VarChar(80)
+  requestedAt          DateTime            @default(now())
+  completedAt          DateTime?
+  errorCode            String?             @db.VarChar(80)
+  errorMessage         String?             @db.Text
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  vehicle              Vehicle?            @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  requestedBy          User                @relation("ExternalQueryRequestedBy", fields: [requestedByUserId], references: [id])
+  records              VehicleExternalRecord[]
+  verificationLogs     ExternalVerificationLog[]
+
+  @@index([vehicleId, requestedAt])
+  @@index([normalizedPlate, requestedAt])
+  @@index([requestedByUserId, requestedAt])
+  @@map("vehicle_external_queries")
+}
+
+model VehicleExternalRecord {
+  id                   String               @id @default(cuid())
+  queryId              String
+  vehicleId            String?
+  providerId           String
+  recordType           ExternalRecordType
+  method               ExternalDataMethod
+  status               ExternalQueryStatus
+  sourceUrl            String?              @db.VarChar(512)
+  sourceReference      String?              @db.VarChar(160)
+  evidenceType         String?              @db.VarChar(80)
+  data                 Json?
+  retrievedAt          DateTime             @default(now())
+  validUntil           DateTime?
+  isSimulated          Boolean              @default(false)
+  errorCode            String?              @db.VarChar(80)
+  errorMessage         String?              @db.Text
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  query                VehicleExternalQuery @relation(fields: [queryId], references: [id], onDelete: Cascade)
+  vehicle              Vehicle?             @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  provider             ExternalDataProvider @relation(fields: [providerId], references: [id])
+  legalRecord          VehicleLegalRecord?
+  taxRecord            VehicleTaxRecord?
+  insuranceRecord      VehicleInsuranceRecord?
+  inspectionRecord     VehicleInspectionRecord?
+  trafficRecord        VehicleTrafficRecord?
+  registryRecord       VehicleRegistryRecord?
+
+  @@index([queryId, providerId])
+  @@index([vehicleId, retrievedAt])
+  @@map("vehicle_external_records")
+}
+
+model VehicleLegalRecord {
+  id                String                @id @default(cuid())
+  externalRecordId  String                @unique
+  vehicleId         String?
+  legalStatus       String?               @db.VarChar(120)
+  encumbrances      Json?
+  annotations       Json?
+  data              Json?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  externalRecord    VehicleExternalRecord @relation(fields: [externalRecordId], references: [id], onDelete: Cascade)
+  vehicle           Vehicle?              @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+
+  @@index([vehicleId, createdAt])
+  @@map("vehicle_legal_records")
+}
+
+model VehicleTaxRecord {
+  id                String                @id @default(cuid())
+  externalRecordId  String                @unique
+  vehicleId         String?
+  fiscalValue       Decimal?              @db.Decimal(16, 2)
+  propertyTax       Decimal?              @db.Decimal(16, 2)
+  currency          String?               @db.VarChar(8)
+  taxPeriod         String?               @db.VarChar(16)
+  data              Json?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  externalRecord    VehicleExternalRecord @relation(fields: [externalRecordId], references: [id], onDelete: Cascade)
+  vehicle           Vehicle?              @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+
+  @@index([vehicleId, taxPeriod])
+  @@map("vehicle_tax_records")
+}
+
+model VehicleInsuranceRecord {
+  id                String                @id @default(cuid())
+  externalRecordId  String                @unique
+  vehicleId         String?
+  marchamoStatus    String?               @db.VarChar(80)
+  paymentStatus     String?               @db.VarChar(80)
+  period            String?               @db.VarChar(16)
+  quotedAmount      Decimal?              @db.Decimal(16, 2)
+  currency          String?               @db.VarChar(8)
+  data              Json?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  externalRecord    VehicleExternalRecord @relation(fields: [externalRecordId], references: [id], onDelete: Cascade)
+  vehicle           Vehicle?              @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+
+  @@index([vehicleId, period])
+  @@map("vehicle_insurance_records")
+}
+
+model VehicleInspectionRecord {
+  id                String                @id @default(cuid())
+  externalRecordId  String                @unique
+  vehicleId         String?
+  inspectedAt       DateTime?
+  result            String?               @db.VarChar(80)
+  expiresAt         DateTime?
+  defects           Json?
+  data              Json?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  externalRecord    VehicleExternalRecord @relation(fields: [externalRecordId], references: [id], onDelete: Cascade)
+  vehicle           Vehicle?              @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+
+  @@index([vehicleId, inspectedAt])
+  @@map("vehicle_inspection_records")
+}
+
+model VehicleTrafficRecord {
+  id                String                @id @default(cuid())
+  externalRecordId  String                @unique
+  vehicleId         String?
+  infractionCount   Int?
+  outstandingAmount Decimal?              @db.Decimal(16, 2)
+  currency          String?               @db.VarChar(8)
+  data              Json?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  externalRecord    VehicleExternalRecord @relation(fields: [externalRecordId], references: [id], onDelete: Cascade)
+  vehicle           Vehicle?              @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+
+  @@index([vehicleId, createdAt])
+  @@map("vehicle_traffic_records")
+}
+
+model VehicleRegistryRecord {
+  id                String                @id @default(cuid())
+  externalRecordId  String                @unique
+  vehicleId         String?
+  vin               String?               @db.VarChar(32)
+  registryStatus    String?               @db.VarChar(120)
+  characteristics   Json?
+  encumbrances      Json?
+  ownershipDisclosed Boolean               @default(false)
+  data              Json?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  externalRecord    VehicleExternalRecord @relation(fields: [externalRecordId], references: [id], onDelete: Cascade)
+  vehicle           Vehicle?              @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+
+  @@index([vehicleId, createdAt])
+  @@map("vehicle_registry_records")
+}
+
+model ExternalVerificationLog {
+  id                String                @id @default(cuid())
+  queryId           String?
+  providerId        String?
+  actorUserId       String?
+  event             String                @db.VarChar(120)
+  status            ExternalQueryStatus?
+  errorCode         String?               @db.VarChar(80)
+  metadata          Json?
+  createdAt         DateTime              @default(now())
+  query             VehicleExternalQuery? @relation(fields: [queryId], references: [id], onDelete: SetNull)
+  provider          ExternalDataProvider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  actor             User?                 @relation("ExternalVerificationActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([queryId, createdAt])
+  @@index([providerId, createdAt])
+  @@map("external_verification_logs")
+}
+
+model VehiclePassport {
+  id              String             @id @default(cuid())
+  vehicleId       String
+  createdByUserId String
+  publicToken     String             @unique @db.VarChar(64)
+  visibility      PassportVisibility @default(PRIVATE)
+  status          PassportStatus     @default(ACTIVE)
+  expiresAt       DateTime
+  revokedAt       DateTime?
+  revokedByUserId String?
+  snapshot        Json?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  vehicle         Vehicle            @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  createdBy       User               @relation("PassportCreatedBy", fields: [createdByUserId], references: [id])
+  revokedBy       User?              @relation("PassportRevokedBy", fields: [revokedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([vehicleId, status, visibility])
+  @@index([expiresAt, status])
+  @@map("vehicle_passports")
+}
+
+model AuditLog {
+  id             String        @id @default(cuid())
+  actorUserId    String?
+  organizationId String?
+  vehicleId      String?
+  action         AuditAction
+  entityType     String        @db.VarChar(80)
+  entityId       String        @db.VarChar(64)
+  requestId      String?       @db.VarChar(64)
+  ipAddress      String?       @db.VarChar(64)
+  metadata       Json?
+  createdAt      DateTime      @default(now())
+  actor          User?         @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  vehicle        Vehicle?      @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([vehicleId, createdAt])
+  @@index([entityType, entityId])
+  @@map("audit_logs")
 }
 
 model Notification {
-  id          String            @id @default(cuid())
-  userId      String
-  type        NotificationType
-  title       String
-  body        String?           @db.Text
-  data        Json?
-  readAt      DateTime?
-  createdAt   DateTime          @default(now())
-  user        User              @relation(fields: [userId], references: [id])
+  id             String           @id @default(cuid())
+  userId         String
+  organizationId String?
+  vehicleId      String?
+  type           NotificationType
+  title          String           @db.VarChar(160)
+  body           String?          @db.Text
+  data           Json?
+  readAt         DateTime?
+  createdAt      DateTime         @default(now())
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  vehicle        Vehicle?         @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
 
   @@index([userId, readAt, createdAt])
-}
-
-model Passport {
-  id          String              @id @default(cuid())
-  vehicleId   String
-  publicToken String              @unique @default(cuid())
-  visibility  PassportVisibility  @default(PRIVATE)
-  status      PassportStatus      @default(ACTIVE)
-  expiresAt   DateTime?
-  snapshot    Json?
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-  vehicle     Vehicle             @relation(fields: [vehicleId], references: [id])
-
-  @@index([vehicleId, status])
+  @@index([organizationId, createdAt])
+  @@map("notifications")
 }
