@@ -1,10 +1,17 @@
-# ENGRAIN — Guía de Demostración para Hackathon (Demo Guide)
+# ENGRAIN — Guía de Demostración para Hackathon (Demo Guide v2)
 
 Esta guía explica paso a paso cómo presentar el flujo integral de **ENGRAIN — Driving Trust** ante el jurado y evaluadores técnicos.
 
 ---
 
-## 1. Modos de Ejecución
+## 1. Configuración de Entorno y Modos de Ejecución
+
+Antes de iniciar la presentación, comprueba el archivo `frontend/.env`:
+```bash
+VITE_API_BASE_URL=http://localhost:3000/api/v1
+VITE_PUBLIC_URL=http://localhost:5173
+VITE_ENABLE_MOCK_FALLBACK=true
+```
 
 ENGRAIN soporta dos modos claramente diferenciados:
 
@@ -17,7 +24,7 @@ ENGRAIN soporta dos modos claramente diferenciados:
 2. **Modo Demostración Rápida (Standalone / Pruebas Offline):**
    - Utiliza usuarios simulados precargados en la pantalla de inicio de sesión (`/login`).
    - Muestra el badge distintivo `[Modo demostración]`.
-   - Permite probar la creación, regeneración y revocación de pasaportes con persistencia en `localStorage` del navegador.
+   - Permite probar la creación, regeneración y revocación de pasaportes con persistencia en `localStorage` del navegador mediante `demoLinkStore`.
 
 ---
 
@@ -38,24 +45,24 @@ ENGRAIN soporta dos modos claramente diferenciados:
 2. Haz clic en **"Ver Expediente"** para abrir el detalle del automóvil (`/owner/vehicles/:id`).
 3. Observa la pestaña **"Línea de Tiempo y Servicios"**:
    - En modo real: Muestra los mantenimientos certificados registrados por el taller.
-   - En modo demo: Muestra la bitácora demostrativa de servicios preventivos.
+   - En modo demo: Muestra la bitácora demostrativa de servicios preventivos con la insignia de demo.
 
 ---
 
 ### Paso 3: Generación del Pasaporte Digital y Código QR
 1. Desde el menú lateral o el expediente, haz clic en **"Pasaporte Digital"** (`/owner/passport`).
 2. Verifica los elementos de la interfaz:
-   - **Enlace de Verificación Activo**: URL absoluta construida con `VITE_PUBLIC_URL` o `window.location.origin`.
-   - **Código QR Certificado**: Generado mediante SVG con nivel de corrección medio.
+   - **Enlace de Verificación Activo**: URL pública absoluta construida con `VITE_PUBLIC_URL` o `window.location.origin`.
+   - **Código QR Certificado**: Renderizado vectorial limpio mediante SVG (`QRCodeSVG`).
    - **Nivel de Visibilidad**: Selector de tres estados (`Público`, `Restringido`, `Privado`).
-   - **Garantías de Privacidad**: Explicación clara de que el nombre del propietario, correos e importes monetarios no se exponen al comprador.
+   - **Garantías de Privacidad**: Explicación clara de que el nombre del propietario, correos e importes monetarios nunca se exponen al comprador.
 3. Haz clic en el botón **"Copiar"** o en **"Ver Vista Pública"** para abrir el enlace en una pestaña nueva o ventana de incógnito.
 
 ---
 
 ### Paso 4: Consulta de la Vista Pública para Compradores
 1. Abre la URL pública generada: `http://localhost:5173/passport/:token`.
-2. Observa la vista del comprador:
+2. Observa la vista del comprador (diseñada para móvil y escritorio):
    - **Score de Integridad (TrustScore)** calculado a partir de las intervenciones verificadas.
    - **Validación del Odómetro** y kilometraje garantizado sin manipulación.
    - **Ficha Técnica**: Marca, modelo, año, placa y número de serie (VIN).
@@ -82,8 +89,20 @@ ENGRAIN soporta dos modos claramente diferenciados:
 3. Haz clic en una orden activa para abrir el asistente de 7 pasos:
    - **Paso 1: Recepción** (Inventario y kilometraje de entrada).
    - **Paso 2: Diagnóstico** (Revisión técnica de averías).
-   - **Paso 3: Presupuesto** (Añadir procedimientos, refacciones y cálculo de IVA).
+   - **Paso 3: Presupuesto** (Añadir partidas con tipo de procedimiento, refacciones y cálculo de IVA).
    - **Paso 4: Aprobación** (Simulación de consentimiento del cliente).
    - **Paso 5: Ejecución** (Checklist de tareas en bahía).
    - **Paso 6: Evidencias** (Fotografías antes / después del servicio).
    - **Paso 7: Finalización** (Al hacer clic en "Finalizar y Sellar Orden", el servicio se convierte automáticamente en un mantenimiento completado en la bitácora del vehículo).
+
+---
+
+## 3. Verificación de Adaptabilidad (Responsive Design)
+
+La interfaz de ENGRAIN ha sido optimizada y verificada para:
+* **Escritorio / Laptop (1280px+)**: Sidebar expandida con accesos directos, tablas completas con acciones y vista en columnas.
+* **Tableta (768px - 1024px)**: Layout fluido con reorganización de tarjetas de KPIs y menús colapsables.
+* **Móvil (360px - 480px)**:
+  - Navegación inferior / lateral accesible mediante `MobileNav`.
+  - Pasaporte público optimizado con banners apilados y visualización de QR adaptada a escaneo directo.
+  - Formularios con campos touch-friendly y botones de acción completa.

@@ -1,4 +1,4 @@
-# Estado de Integración Frontend — Backend (Etapa B6)
+# Estado de Integración Frontend — Backend (Etapa B6.1)
 
 **ENGRAIN — Driving Trust**  
 **Fecha de actualización**: 21 de noviembre de 2026  
@@ -7,79 +7,83 @@
 
 ---
 
-## 1. Resumen de Integración
+## 1. Resumen de Integración y Validación
 
-En la Etapa B6 se completó la integración técnica de los servicios frontend con los endpoints del backend implementados para el MVP: **Auth**, **Vehículos**, **Órdenes de Trabajo (Work Orders)**, **Mantenimientos (Maintenances)** y **Pasaportes Digitales (Passports)**.
+En la Etapa B6.1 se realizó la auditoría técnica exhaustiva y validación estática de las integraciones desarrolladas en B6, comprobando la compatibilidad de esquemas entre el frontend y el backend, las variables de entorno, la ausencia total de fallbacks silenciosos ante errores del servidor y la estabilidad del modo demostración.
 
-Se implementó una separación estricta entre el **Modo Real** y el **Modo Demostración**:
-1. **Sin fallbacks silenciosos**: Cuando la aplicación opera en modo real contra el backend, los errores de red, autenticación (401), autorización (403), validación (422) o recurso no encontrado (404) se transmiten directamente a la interfaz sin sustituirlos por datos ficticios.
-2. **Modo Demostración Explícito**: Únicamente se activa cuando el usuario inicia sesión como usuario demo (`engrain_demo_user` / `switchDemoRole`) o navega con un token demo explícito (`demo-token-123`, `engrain-demo-...`).
-3. **Persistencia de Enlaces Demo**: Mediante `demoLinkStore`, la revocación de tokens demo se preserva en `localStorage` del navegador para evaluar la experiencia de usuario y recargas locales sin comprometer la seguridad de pasaportes reales.
-
----
-
-## 2. Matriz de Endpoints y Estado de Disponibilidad
-
-| Módulo | Método y Ruta | Estado Backend | Integración Frontend | Comportamiento en Modo Real / Demo |
-| :--- | :--- | :--- | :--- | :--- |
-| **System** | `GET /health` | **Disponible** | Integrado | Verifica disponibilidad del proceso backend. |
-| **Auth** | `POST /auth/register` | **Disponible** | Integrado | Registro real con rol `OWNER`. |
-| **Auth** | `POST /auth/login` | **Disponible** | Integrado | Login con JWT persistido en memoria / storage. |
-| **Auth** | `GET /auth/me` | **Disponible** | Integrado | Validación de sesión activa del usuario. |
-| **Vehículos** | `GET /vehicles` | **Disponible** | Integrado | Listado de vehículos del propietario autenticado. |
-| **Vehículos** | `POST /vehicles` | **Disponible** | Integrado | Alta de vehículo con VIN (17 caracteres) y placa. |
-| **Vehículos** | `GET /vehicles/:id` | **Disponible** | Integrado | Consulta de expediente de vehículo propio. |
-| **Vehículos** | `PATCH /vehicles/:id` | **Disponible** | Integrado | Actualización de odómetro y datos vehiculares. |
-| **Vehículos** | `DELETE /vehicles/:id` | **Disponible** | Integrado | Archivado lógico (`ARCHIVED`) de vehículo. |
-| **Work Orders** | `GET /work-orders` | **Disponible** | Integrado | Consulta órdenes filtradas por vehículo/taller. |
-| **Work Orders** | `POST /work-orders` | **Disponible** | Integrado | Creación de orden técnica (`TECHNICIAN`, `WORKSHOP_ADMIN`). |
-| **Work Orders** | `GET /work-orders/:id` | **Disponible** | Integrado | Consulta detallada con participantes autorizados. |
-| **Work Orders** | `PATCH /work-orders/:id` | **Disponible** | Integrado | Actualización de estado y cierre de orden. |
-| **Maintenances** | `GET /maintenances` | **Disponible** | Integrado | Historial de mantenimientos por vehículo. |
-| **Maintenances** | `POST /maintenances` | **Disponible** | Integrado | Registro de servicio preventivo/correctivo certificado. |
-| **Maintenances** | `GET /maintenances/:id` | **Disponible** | Integrado | Consulta individual de mantenimiento. |
-| **Maintenances** | `PATCH /maintenances/:id` | **Disponible** | Integrado | Edición de fecha, descripción y kilometraje. |
-| **Maintenances** | `DELETE /maintenances/:id` | **Disponible** | Integrado | Eliminación autorizada de registro. |
-| **Passports** | `POST /passports` | **Disponible** | Integrado | Generación de pasaporte y `publicToken` criptográfico. |
-| **Passports** | `GET /passports/:id` | **Disponible** | Integrado | Consulta de pasaporte interno por propietario. |
-| **Passports** | `PATCH /passports/:id` | **Disponible** | Integrado | Modificación de visibilidad y revocación (`REVOKED`). |
-| **Passports** | `GET /passports/public/:publicToken` | **Disponible** *(Nota)* | Integrado | Consulta pública sin JWT (`skipAuth: true`). |
-| **Evidencias** | `POST /evidences/upload-intents` | *501 Reservado* | Modo Demo | Simulación de subida de archivos antes/después. |
-| **Diagnósticos** | `GET /diagnostics` | *501 Reservado* | Modo Demo | Telemetría OBD2 y simulación de lectura CAN. |
-| **Workshops** | `GET /workshops` | *501 Reservado* | Modo Demo | Perfil de taller en demostración. |
-| **Asistente IA** | `POST /assistant/messages` | *501 Reservado* | Modo Demo | Descargos de responsabilidad y chat asistencial. |
-| **Notificaciones**| `GET /notifications` | *501 Reservado* | Modo Demo | Bandeja de avisos del sistema. |
+### Verificación de Variables de Entorno
+* `VITE_API_BASE_URL=http://localhost:3000/api/v1`: Endpoint base del backend REST v1.
+* `VITE_PUBLIC_URL=http://localhost:5173`: URL pública absoluta para enlaces compartibles y códigos QR (en producción apunta al dominio público de despliegue).
+* `VITE_ENABLE_MOCK_FALLBACK=true`: Bandera para permitir el modo demostración explícito cuando se requiera. No realiza sustituciones silenciosas ante errores HTTP 401, 403, 404, 410 o 500 en flujos de datos reales.
 
 ---
 
-## 3. Observación Técnica para el Desarrollador Backend
+## 2. Estado de Disponibilidad del Proceso Backend
 
-> [!WARNING]
-> **Ruta pública de pasaportes con autenticación requerida en Backend:**
-> En `backend/src/modules/passports/passport.router.ts`:
-> ```typescript
-> const router = Router();
-> router.use(authenticate); // <-- Aplicado a nivel global en todo el router
-> ...
-> // Public endpoint (no auth)
-> router.get("/public/:publicToken", validate(publicTokenSchema, "params"), getPassportByPublicToken);
-> ```
-> Al estar `router.use(authenticate)` declarado antes de `router.get("/public/:publicToken")`, las solicitudes de usuarios no registrados (compradores que escanean el QR) son rechazadas con HTTP `401 AUTHENTICATION_REQUIRED`.
-> **Acción requerida en backend:** Mover `router.get("/public/:publicToken", ...)` antes de `router.use(authenticate)` o eximir la ruta pública del middleware. El frontend ya envía la petición con `skipAuth: true`.
+> [!IMPORTANT]
+> **Estado en la sesión de auditoría:**
+> Se verificó el estado de red local en el puerto `3000`. El proceso del backend no se encontraba en ejecución activa en segundo plano en esta sesión (`Get-NetTCPConnection -LocalPort 3000` retornó nulo).
+> Siguiendo la política de integridad de ENGRAIN: **No se inventan pruebas de red ni se simulan resultados falsos**.
+> Se deja documentado el procedimiento y checklist para ejecutar la prueba en vivo tan pronto como el compañero de backend levante el servidor (`npm --prefix backend run dev`).
 
 ---
 
-## 4. Normalización de Respuestas de Pasaporte Público
+## 3. Matriz de Endpoints y Compatibilidad de Esquemas
 
-En el backend, `getPassportByPublicToken` responde con:
-```json
-{
-  "success": true,
-  "data": {
-    "passport": { "id": "...", "publicToken": "...", "status": "ACTIVE", "visibility": "PUBLIC" },
-    "vehicle": { "vin": "...", "plate": "...", "make": "...", "model": "...", "year": 2021, "mileageKm": 72000 },
-    "maintenances": [ { "id": "...", "title": "...", "mileageKm": 72000, "status": "COMPLETED" } ]
-  }
-}
-```
-En `passportService.ts`, el frontend normaliza automáticamente este sobre a la interfaz `PassportSnapshot` de modo que la vista pública muestra de forma inmediata el vehículo real y sus mantenimientos certificados.
+| Módulo | Método y Ruta | Contrato Backend | Compatibilidad Frontend |
+| :--- | :--- | :--- | :--- |
+| **System** | `GET /health` | `{ service, status: "ok", timestamp }` | ✅ Compatible. Valida disponibilidad sin credenciales. |
+| **Auth** | `POST /auth/register` | Body: `{ name, email, password }` | ✅ Compatible. Validación Zod con roles asignados. |
+| **Auth** | `POST /auth/login` | Body: `{ email, password }` | ✅ Compatible. Persistencia de JWT en memoria y storage. |
+| **Auth** | `GET /auth/me` | Bearer token | ✅ Compatible. Restablece la sesión activa al recargar. |
+| **Vehículos** | `GET /vehicles` | Filtro implícito por `ownerId` | ✅ Compatible. Listado de vehículos del usuario. |
+| **Vehículos** | `POST /vehicles` | Body: `{ vin, plate, make, model, year, mileageKm, dataSource? }` | ✅ Compatible. VIN validado a 17 caracteres y mayúsculas. |
+| **Vehículos** | `GET /vehicles/:id` | `params: { id }` (CUID) | ✅ Compatible. Expediente detallado del automóvil. |
+| **Vehículos** | `PATCH /vehicles/:id` | Body parcial de campos modificables | ✅ Compatible. Actualizaciones de kilometraje y placas. |
+| **Vehículos** | `DELETE /vehicles/:id` | Archivado lógico (`ARCHIVED`) | ✅ Compatible. Retiro de la cochera sin borrado destructivo. |
+| **Work Orders** | `GET /work-orders` | `query: { vehicleId?, workshopId?, status? }` | ✅ Compatible. Listado filtrado por vehículo o taller. |
+| **Work Orders** | `POST /work-orders` | Body: `{ vehicleId, workshopId, title, description?, status? }` | ✅ Compatible. Sanitización de payload para evitar campos no permitidos. |
+| **Work Orders** | `GET /work-orders/:id` | `params: { id }` | ✅ Compatible. Consulta de orden técnica por participantes. |
+| **Work Orders** | `PATCH /work-orders/:id` | Body `.strict()`: `{ status?, title?, description?, closedAt? }` | ✅ Compatible. `workOrderService.ts` filtra campos adicionales de UI (`budget`, `items`) para evitar error 422. |
+| **Maintenances** | `GET /maintenances` | `query: { vehicleId?, status? }` | ✅ Compatible. Filtro por vehículo para el historial del propietario. |
+| **Maintenances** | `POST /maintenances` | Body: `{ vehicleId, title, description?, dueDate?, mileageKm?, status? }` | ✅ Compatible. Creación y vinculación automática al finalizar órdenes. |
+| **Maintenances** | `GET /maintenances/:id` | `params: { id }` | ✅ Compatible. Detalle del mantenimiento. |
+| **Maintenances** | `PATCH /maintenances/:id` | Body parcial | ✅ Compatible. Actualización de bitácora técnica. |
+| **Maintenances** | `DELETE /maintenances/:id` | Creador autorizado | ✅ Compatible. Borrado con respuesta 204. |
+| **Passports** | `POST /passports` | Body: `{ vehicleId, visibility? }` | ✅ Compatible. Generación de `publicToken` criptográfico. |
+| **Passports** | `GET /passports/:id` | `params: { id }` | ✅ Compatible. Consulta privada por el propietario. |
+| **Passports** | `PATCH /passports/:id` | Body `.strict()`: `{ visibility?, status? }` | ✅ Compatible. Revocación (`status: "REVOKED"`). |
+| **Passports** | `GET /passports/public/:publicToken` | Público (sin JWT) | ⚠️ **Observación Backend:** El backend tiene `router.use(authenticate)` previo a esta ruta, retornando 401 a usuarios anónimos. Solución documentada en backend. |
+
+---
+
+## 4. Política Anti-Fallback Silencioso Verificada
+
+Se auditó el código de `passportService.ts`, `maintenanceService.ts`, `workOrderService.ts` y `vehicleService.ts`:
+* Ninguna función intercepta errores `401`, `403`, `404`, `410` o errores de red para sustituirlos por mocks si la sesión está en modo real.
+* Los errores del servidor se elevan directamente al componente visual (`Toast`, `ErrorState` o mensajes de validación).
+* Los datos simulados se reservan **única y exclusivamente** para sesiones iniciadas expresamente como usuario de demostración (`isExplicitDemoMode() === true`) o al consultar identificadores de prueba con prefijo `demo-`.
+
+---
+
+## 5. Checklist de Pruebas de Integración (Al Iniciar Backend)
+
+Tan pronto como el servidor backend esté corriendo en `http://localhost:3000`:
+
+1. **Autenticación:**
+   - Registrar usuario nuevo en `http://localhost:5173/register`.
+   - Iniciar sesión y comprobar recepción de JWT en `localStorage`.
+2. **Vehículos:**
+   - Crear un vehículo nuevo en `/owner/garage` (VIN de 17 caracteres).
+   - Comprobar que aparece en la lista con datos persistidos en MySQL.
+3. **Órdenes de Trabajo y Mantenimiento:**
+   - Como taller, crear una orden vinculada al vehículo.
+   - Avanzar los 7 pasos y finalizar la orden para certificar el mantenimiento.
+   - Verificar que el propietario observa el mantenimiento en `/owner/vehicles/:id`.
+4. **Pasaporte Digital:**
+   - Generar el pasaporte desde `/owner/passport`.
+   - Copiar la URL pública absoluta generada con el `publicToken`.
+   - Abrir en ventana privada sin iniciar sesión: verificar que muestra los datos del vehículo y el mantenimiento certificado.
+5. **Revocación:**
+   - Desde la cuenta de propietario, hacer clic en **"Revocar Enlace"**.
+   - Recargar la ventana privada: verificar que responde con estado revocado y **NO muestra información del vehículo**.

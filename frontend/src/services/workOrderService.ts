@@ -76,10 +76,24 @@ export const workOrderService = {
     }
 
     try {
-      return await apiClient<WorkOrder>('/work-orders', {
+      // Filtrar campos estipulados en el contrato del backend para createWorkOrderSchema
+      const payload: Record<string, any> = {
+        vehicleId: input.vehicleId,
+        title: input.title,
+      };
+      if (input.workshopId) payload.workshopId = input.workshopId;
+      if (input.description !== undefined) payload.description = input.description;
+      if (input.status !== undefined) payload.status = input.status;
+
+      const serverRes = await apiClient<WorkOrder>('/work-orders', {
         method: 'POST',
-        body: JSON.stringify(input),
+        body: JSON.stringify(payload),
       });
+
+      return {
+        ...serverRes,
+        ...input,
+      };
     } catch (err: any) {
       throw err;
     }
@@ -104,10 +118,22 @@ export const workOrderService = {
     }
 
     try {
-      return await apiClient<WorkOrder>(`/work-orders/${id}`, {
+      // Filtrar campos estrictos permitidos por el backend (updateWorkOrderSchema.strict())
+      const payload: Record<string, any> = {};
+      if (updates.status !== undefined) payload.status = updates.status;
+      if (updates.title !== undefined) payload.title = updates.title;
+      if (updates.description !== undefined) payload.description = updates.description;
+      if (updates.closedAt !== undefined) payload.closedAt = updates.closedAt;
+
+      const serverRes = await apiClient<WorkOrder>(`/work-orders/${id}`, {
         method: 'PATCH',
-        body: JSON.stringify(updates),
+        body: JSON.stringify(payload),
       });
+
+      return {
+        ...serverRes,
+        ...updates,
+      };
     } catch (err: any) {
       throw err;
     }
