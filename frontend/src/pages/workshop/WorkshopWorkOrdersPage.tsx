@@ -20,14 +20,12 @@ import { Input } from '../../components/ui/Input';
 import { Textarea } from '../../components/ui/Textarea';
 import { Select } from '../../components/ui/Select';
 import { Modal } from '../../components/ui/Modal';
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '../../components/ui/Table';
 import { workOrderService } from '../../services/workOrderService';
 import { vehicleService } from '../../services/vehicleService';
 import { maintenanceService } from '../../services/maintenanceService';
 import { evidenceService } from '../../services/evidenceService';
 import { WorkOrder, WorkOrderStatus, WorkOrderItem } from '../../types/workshop';
 import { Vehicle } from '../../types/vehicle';
-import { EvidenceItem } from '../../types/evidence';
 import { PageLoading } from '../../components/ui/Loading';
 import { useToast } from '../../hooks/useToast';
 import { MOCK_WORKSHOP_MEMBERS } from '../../services/mockAdapters';
@@ -692,23 +690,43 @@ export const WorkshopWorkOrdersPage: React.FC = () => {
                 {activeOrder.status !== 'COMPLETED' && (
                   <div className="p-3 rounded-xl bg-carbon border border-graphite-700/60 space-y-2">
                     <span className="text-xs font-semibold text-graphite-300">Añadir Procedimiento o Refacción</span>
-                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-6 gap-2">
+                      <Select
+                        value={newItemType}
+                        onChange={(e) => setNewItemType(e.target.value as any)}
+                        options={[
+                          { value: 'PROCEDURE', label: 'Procedimiento' },
+                          { value: 'PART', label: 'Refacción' },
+                          { value: 'DIAGNOSTIC', label: 'Diagnóstico' },
+                          { value: 'SUPPLY', label: 'Insumo' },
+                        ]}
+                        className="sm:col-span-2 text-xs"
+                      />
                       <Input
-                        placeholder="Descripción de procedimiento / pieza..."
+                        placeholder="Descripción..."
                         value={newItemDesc}
                         onChange={(e) => setNewItemDesc(e.target.value)}
                         className="sm:col-span-2 text-xs"
                       />
                       <Input
                         type="number"
-                        placeholder="Precio unitario"
-                        value={newItemPrice}
-                        onChange={(e) => setNewItemPrice(Number(e.target.value))}
+                        placeholder="Cant."
+                        value={newItemQty}
+                        onChange={(e) => setNewItemQty(Math.max(1, Number(e.target.value)))}
                         className="text-xs"
                       />
-                      <Button size="sm" variant="primary" onClick={handleAddItemToBudget}>
-                        Añadir
-                      </Button>
+                      <div className="flex gap-1.5">
+                        <Input
+                          type="number"
+                          placeholder="Precio"
+                          value={newItemPrice}
+                          onChange={(e) => setNewItemPrice(Number(e.target.value))}
+                          className="text-xs"
+                        />
+                        <Button size="sm" variant="primary" onClick={handleAddItemToBudget}>
+                          +
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 )}

@@ -41,4 +41,5 @@ export interface Passport {
   snapshot: PassportSnapshot;
   createdAt: string;
   updatedAt: string;
+  _isDemo?: boolean;
 }
