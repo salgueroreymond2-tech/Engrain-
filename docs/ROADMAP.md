@@ -4,8 +4,9 @@
 
 - [x] Arquitectura backend, contrato y modelo de datos.
 - [x] Health check, Swagger, CORS, errores, JWT y pruebas de humo.
-- [ ] Crear base MySQL compartida, migración inicial y usuarios de demostración.
-- [ ] Completar flujos CRUD de taller, órdenes, mantenimientos y evidencias.
+- [x] Crear esquema PostgreSQL, migración inicial y seeders ficticios.
+- [x] Aplicar la migración y el seeder contra la instancia Supabase compartida.
+- [ ] Completar flujos CRUD de órdenes, mantenimientos y evidencias.
 - [ ] Integrar lectura OBD2 simulada y persistencia de diagnósticos.
 - [ ] Conectar el frontend React al contrato de `/api/v1`.
 - [ ] Demo del pasaporte compartible y notificación Socket.IO.

@@ -6,7 +6,7 @@ import { AppError } from "../shared/errors/app-error";
 type RequestPart = "body" | "params" | "query";
 
 export const validate = (schema: ZodTypeAny, part: RequestPart = "body"): RequestHandler =>
-  (request, _response, next) => {
+  (request, response, next) => {
     const parsed = schema.safeParse(request[part]);
 
     if (!parsed.success) {
@@ -24,6 +24,12 @@ export const validate = (schema: ZodTypeAny, part: RequestPart = "body"): Reques
       return;
     }
 
-    request[part] = parsed.data;
+    // Express 5 exposes request.query as a getter. Keep the normalized query in locals
+    // instead of assigning to it, while preserving body/params normalization.
+    if (part === "query") {
+      response.locals.validatedQuery = parsed.data;
+    } else {
+      request[part] = parsed.data;
+    }
     next();
   };

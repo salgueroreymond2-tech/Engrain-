@@ -1,11 +1,12 @@
 import type { Server as HttpServer } from "node:http";
 
-import jwt, { type JwtPayload } from "jsonwebtoken";
 import { Server } from "socket.io";
 
 import { env } from "../config/env";
+import { prisma } from "../lib/prisma";
+import { verifyAccessToken } from "../shared/security/tokens";
 
-type SocketAuth = { id: string; role: string };
+type SocketAuth = { id: string; role: string; sessionId: string };
 
 export const createSocketServer = (httpServer: HttpServer): Server => {
   const io = new Server(httpServer, {
@@ -15,7 +16,7 @@ export const createSocketServer = (httpServer: HttpServer): Server => {
     }
   });
 
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     const token = socket.handshake.auth.token;
     if (typeof token !== "string") {
       next(new Error("AUTHENTICATION_REQUIRED"));
@@ -23,11 +24,13 @@ export const createSocketServer = (httpServer: HttpServer): Server => {
     }
 
     try {
-      const payload = jwt.verify(token, env.JWT_ACCESS_SECRET) as JwtPayload;
-      if (!payload.sub || typeof payload.role !== "string") {
-        throw new Error("INVALID_TOKEN");
-      }
-      socket.data.auth = { id: payload.sub, role: payload.role } as SocketAuth;
+      const payload = verifyAccessToken(token);
+      const session = await prisma.authSession.findFirst({
+        where: { id: payload.sessionId, userId: payload.userId, revokedAt: null, expiresAt: { gt: new Date() }, user: { isActive: true } },
+        select: { id: true }
+      });
+      if (!session) throw new Error("SESSION_REVOKED");
+      socket.data.auth = { id: payload.userId, role: payload.role, sessionId: session.id } as SocketAuth;
       next();
     } catch {
       next(new Error("INVALID_TOKEN"));

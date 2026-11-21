@@ -22,6 +22,6 @@ ENGRAIN — Driving Trust crea una línea de tiempo vehicular respaldada por evi
 ## Restricciones
 
 - Entrega objetivo: domingo 22 de noviembre de 2026.
-- Backend: Node.js, Express, TypeScript, MySQL, Prisma, JWT, Zod, Swagger y Socket.IO.
+- Backend: Node.js, Express, TypeScript, PostgreSQL en Supabase, Prisma, JWT, Zod, Swagger y Socket.IO. PostgreSQL sustituye MySQL para esta hackathon por decisión explícita del equipo.
 - Frontend independiente: React, Vite y Tailwind CSS. No se modifica en este alcance.
 - Se prioriza un monolito modular mantenible sobre microservicios.
